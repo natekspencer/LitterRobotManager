@@ -51,18 +51,8 @@ metadata {
         capability "Refresh"
         capability "Health Check"
 
-        //attribute "cleanCycleWaitTimeMinutes", "enum", [3,7,F]
-        //attribute "cycleCapacity", "number"
-        //attribute "cycleCount", "number"
-        //attribute "cyclesAfterDrawerFull", "number"
-        //attribute "cyclesUntilFull", "number"
-        //attribute "DFICycleCount", "number"
-        //attribute "isDFITriggered", "enum", [0,1]
-        //attribute "lastSeen", "string"
-        //attribute "litterRobotId", "string"
-        //attribute "nightLightActive", "enum", [0,1]
-        //attribute "panelLockActive", "enum", [0,1]
-        //attribute "sleepMode", "string"
+        attribute "cycleCapacity", "number"
+        attribute "cycleCount", "number"
 
         command "lightOn"
         command "lightOff"
@@ -105,7 +95,7 @@ metadata {
                 attributeState "P"      , label:'Clean Cycle Paused'                                                            , backgroundColor:"#00a0dc", icon:"https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
                 attributeState "RDY"    , label:'Ready\nPress To Clean'  , action:"setRobotCleanerMovement", nextState:"startCC", backgroundColor:"#ffffff", icon:"https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
                 attributeState "SDF"    , label:'Drawer Is Full'                                                                , backgroundColor:"#bc2323", icon:"https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "startCC", label:'Preparing To Clean'                                                            , backgroundColor:"#00a0dc", icon:"https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
+                attributeState "startCC", label:'Preparing To Clean'     , action:"setRobotCleanerMovement", nextState:"startCC", backgroundColor:"#00a0dc", icon:"https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
             }
             tileAttribute("device.robotStatusText", key:"SECONDARY_CONTROL") {
                 attributeState "val", label:'${currentValue}', defaultState:true
@@ -332,12 +322,12 @@ def parseUnitStatus(status, lastSeen) {
             events["tamper"].value = "detected"
             break
         case "CCC": // Clean Cycle Complete - Clean litter is now ready for next use
-            events["lastCleaned"] = [value:lastSeen]
+            events["lastCleaned"] = [value:lastSeen,display:false]
             break
         case "CCP": // Clean Cycle In Progress - Litter-Robot is running a Clean Cycle
             events["acceleration"].value = "active"
             events["contact"].value = "open"
-            events["lastCleaned"] = [value:lastSeen]
+            events["lastCleaned"] = [value:lastSeen,display:false]
             break
         case "CSF": // Cat Sensor Fault - Weight in the Litter-Robot is too heavy
             break
