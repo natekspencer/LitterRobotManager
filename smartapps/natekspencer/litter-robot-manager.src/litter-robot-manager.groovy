@@ -11,10 +11,11 @@
  *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
- *
- *  VERSION HISTORY
- *  DATE           VERSION        NOTES
- *  2019-04-10     1.0.0          Initial release
+ *  
+ *  CHANGE HISTORY
+ *  VERSION     DATE            NOTES
+ *  1.0.0       2019-04-10      Initial release
+ *  1.0.1       2019-04-23      Attempt to re-auth twice if first re-auth fails. Also adds support for resetting gauge
  *
  */
 
@@ -60,14 +61,17 @@ def mainPage() {
         dynamicPage(name: "mainPage", install: true, uninstall: true) {
             if (robots) {
                 section("Select which Litter-Robots to use:") {
-                    input(name:"robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, metadata: [values: robots])
+                    input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, metadata: [values: robots])
                 }
                 section("How frequently do you want to poll the Litter-Robot cloud for changes? (Use a lower number if you care about trying to capture and respond to \"cleaning\" events as they happen)") {
-                    input(name:"pollingInterval", title:"Polling Interval (in Minutes)", type:"enum", required:false, multiple:false, defaultValue:5, description:"5", options:["1","5","10","15","30"])
+                    input(name: "pollingInterval", title: "Polling Interval (in Minutes)", type: "enum", required: false, multiple: false, defaultValue: 5, description: "5", options: ["1", "5", "10", "15", "30"])
                 }
             }
             section("Litter-Robot Authentication") {
-                href("authPage", title: "Litter-Robot API Authorization", description: "${state.credentialStatus?state.credentialStatus+"\n":""}Click to enter Litter-Robot credentials")
+                href("authPage", title: "Litter-Robot API Authorization", description: "${state.credentialStatus ? state.credentialStatus+"\n" : ""}Click to enter Litter-Robot credentials")
+            }
+            section ("Name this instance of ${app.name}") {
+                label name: "name", title: "Assign a name", required: false, defaultValue: app.name, description: app.name, submitOnChange: true
             }
         }
     }
@@ -104,7 +108,8 @@ def authResultPage() {
     }
 }
 
-def doLogin(){
+boolean doLogin(){
+    def loggedIn = false
     def resp = doCallout("POST", "/login", [email: email, password: password, oneSignalPlayerId: "0"])
     
     switch (resp.status) {
@@ -123,6 +128,7 @@ def doLogin(){
             state.robots = null
             break
         case 200:
+            loggedIn = true
             state.loginResponse = resp.data._developerMessage
             state.uri = resp.data._uri
             state.token = resp.data.token
@@ -138,10 +144,13 @@ def doLogin(){
             state.robots = null
             break
     }
+
+    loggedIn
 }
 
 def reAuth() {
-    doLogin()
+    if (!doLogin())
+        doLogin() // timeout or other issue occurred, try one more time
 }
 
 // Get the list of Litter-Robots
@@ -150,7 +159,7 @@ def getLitterRobots() {
     // save in state so we can re-use in settings
     def robots = [:]
     data.each {
-        robots[[app.id,it.litterRobotId].join('.')] = it.litterRobotNickname
+        robots[[app.id, it.litterRobotId].join('.')] = it.litterRobotNickname
     }
     state.robots = robots
     data
@@ -164,7 +173,7 @@ def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
     log.info "Calling ${urlPath}"
     def params = [
         uri: "https://muvnkjeut7.execute-api.us-east-1.amazonaws.com",
-        path: "/staging/${urlPath=="/login"?"":(state.uri?.trim()?:"")}${urlPath}",
+        path: "/staging/${urlPath == "/login" ? "" : (state.uri?.trim()?:"")}${urlPath}",
         query: queryParams,
         headers: [
             "Content-Type": "application/json",
@@ -181,6 +190,8 @@ def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
                     return resp
                 }
                 break
+            case "PATCH":
+                params.headers["x-http-method-override"] = "PATCH"
             case "POST":
                 httpPostJson(params) {resp->
                     return resp
@@ -234,7 +245,7 @@ def initialize() {
     // set up polling only if we have child devices
     if(childDevices.size() > 0) {
         pollChildren()
-        "runEvery${pollingInterval}Minute${pollingInterval!="1"?'s':''}"("pollChildren")
+        "runEvery${pollingInterval}Minute${pollingInterval != "1" ? 's' : ''}"("pollChildren")
     } else unschedule(pollChildren)
 }
 
@@ -247,7 +258,7 @@ def pollChildren() {
         def robots = getLitterRobots()
         devices.each {
             def dni = it.deviceNetworkId
-            def deviceData = robots.find { [app.id,it.litterRobotId].join('.') == dni}
+            def deviceData = robots.find { [app.id, it.litterRobotId].join('.') == dni }
             it.parseEventData(deviceData)
         }
     }
@@ -264,6 +275,11 @@ def getActivity(litterRobotId, limit=10) {
     resp.data.activities
 }
 
+def resetDrawerGauge(litterRobotId, params) {
+    def resp = doCallout("PATCH", "/litter-robots/${litterRobotId}", [litterRobotNickname: params.name, cycleCapacity: params.capacity, cycleCount: 0, cyclesAfterDrawerFull: 0])
+    resp.data
+}
+
 def isoFormat() {
     "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
 }
@@ -273,10 +289,9 @@ def toStDateString(date) {
 }
 
 def parseStDate(dateStr) {
-    Date.parse(isoFormat(), dateStr)
+    dateStr?.trim() ? timeToday(dateStr) : null
 }
 
 def parseLrDate(dateStr) {
-    if (dateStr?.trim()) Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS", dateStr?.substring(0,23))
-    else null
+    dateStr?.trim() ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS", dateStr?.substring(0,23)) : null
 }
