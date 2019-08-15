@@ -68,7 +68,8 @@ metadata {
 		attribute "cyclesAfterDrawerFull", "number"
 		attribute "litterRobotId", "string"
 		attribute "lastCleaned", "string"	
-
+		attribute "drawerLevel", "number"
+		
         command "lightOn"
         command "lightOff"
         command "panelLockOn"
@@ -109,7 +110,7 @@ def updated() {
     def oldStartTime = device.currentValue("sleepModeStartTime")
     def newStartTime = sleepTime ? timeToday(sleepTime).format("hh:mm") : oldStartTime?:"22:00"
     if (device.currentValue("sleepModeActive") == "on" && newStartTime != oldStartTime) {
-        sendEvent(name: "sleepModeTime", value: "${device.currentValue("sleepModeTime")}\n(updating)", displayed: false)
+        sendEvent(name: "sleepModeTime", value: "${device.currentValue("sleepModeTime")}\n(updating)")
         sleepOn()
     }
     
@@ -234,7 +235,7 @@ def getActivities() {
 def getLastCleaned() {
     def lastCleaned = getActivities().find { it.unitStatus == "CCC" || it.unitStatus == "CCP" }?.timestamp
     if(lastCleaned) { // let's only update this if we get a value back
-        sendEvent(name: "lastCleaned", value: lastCleaned, displayed: false)
+        sendEvent(name: "lastCleaned", value: lastCleaned)
         setRobotStatusText()
     }
 }
@@ -274,7 +275,7 @@ def parseEventData(Map results) {
                 parseUnitStatus(value, results.lastSeen)
                 break
             default:
-                sendEvent(name: name, value: value, displayed: false)
+                sendEvent(name: name, value: value)
                 break
         }
     }
@@ -286,7 +287,8 @@ def setRobotStatusText() {
     use(TimeCategory){
         def format = "hh:mm aa"
         if (lastCleaned && (new Date() - lastCleaned) >= (23.hours+45.minutes)) format = "MMM dd @ hh:mm aa"
-        sendEvent(name: "robotStatusText", value: "drawer: ${Math.round(device.currentValue("cycleCount")/device.currentValue("cycleCapacity")*100)}% full\nlast cleaned: ${lastCleaned?.format(format, getTimeZone())?:"unknown"}", displayed: false)
+        sendEvent(name: "robotStatusText", value: "drawer: ${Math.round(device.currentValue("cycleCount")/device.currentValue("cycleCapacity")*100)}% full\nlast cleaned: ${lastCleaned?.format(format, getTimeZone())?:"unknown"}")
+		sendEvent(name: "drawerLevel", value: Math.round(device.currentValue("cycleCount")/device.currentValue("cycleCapacity")*100))
     }
 }
 
@@ -297,10 +299,10 @@ def parseUnitStatus(status, lastSeen) {
     events["lastStatusCode"]           = [value: status]
     events["acceleration"]             = [value: "inactive"]
     events["contact"]                  = [value: "closed"]
-    events["DeviceWatch-DeviceStatus"] = [value: "online", displayed: false]
-    events["healthStatus"]             = [value: "online", displayed: false]
+    events["DeviceWatch-DeviceStatus"] = [value: "online"]
+    events["healthStatus"]             = [value: "online"]
     events["motion"]                   = [value: "inactive"]
-    events["power"]                    = [value: "on"    , displayed: false]
+    events["power"]                    = [value: "on"]
     events["switch"]                   = [value: "off"]
     events["tamper"]                   = [value: "clear"]
     
@@ -314,13 +316,13 @@ def parseUnitStatus(status, lastSeen) {
 			events["robotCleanerMovement"].value = "alarm";
             break
         case "CCC": // Clean Cycle Complete - Clean litter is now ready for next use
-            events["lastCleaned"] = [value: lastSeen, displayed: false]
+            events["lastCleaned"] = [value: lastSeen]
 			events["robotCleanerMovement"].value = "idle";
             break
         case "CCP": // Clean Cycle In Progress - Litter-Robot is running a Clean Cycle
             events["acceleration"].value = "active"
             events["contact"].value = "open"
-            events["lastCleaned"] = [value: lastSeen, displayed: false]
+            events["lastCleaned"] = [value: lastSeen]
             events["switch"].value = "on"
 			events["robotCleanerMovement"].value = "cleaning";
             break
@@ -381,7 +383,7 @@ def parseUnitStatus(status, lastSeen) {
     }
 
     events.each {k, v ->
-        sendEvent(name: k, value: v.value, displayed: v.displayed)
+        sendEvent(name: k, value: v.value)
     }
 }
 
@@ -404,9 +406,9 @@ def setSleepModeStatuses(value, robotLastSeen) {
         sleepModeTime = "unknown"
     }
     sendEvent(name: "sleepModeActive", value: sleepModeActive)
-    sendEvent(name: "sleepModeStartTime", value: sleepModeStartTime?.format("HH:mm"), displayed: false)
-    sendEvent(name: "sleepModeEndTime", value: sleepModeEndTime?.format("HH:mm"), displayed: false)
-    sendEvent(name: "sleepModeTime", value: sleepModeTime, displayed: false)
+    sendEvent(name: "sleepModeStartTime", value: sleepModeStartTime?.format("HH:mm"))
+    sendEvent(name: "sleepModeEndTime", value: sleepModeEndTime?.format("HH:mm"))
+    sendEvent(name: "sleepModeTime", value: sleepModeTime)
 }
 
 def getTimeZone() {
