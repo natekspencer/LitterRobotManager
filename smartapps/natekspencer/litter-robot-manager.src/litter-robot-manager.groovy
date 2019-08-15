@@ -31,9 +31,7 @@ definition(
     iconX2Url: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@2x.png",
     iconX3Url: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png",
     singleInstance: true
-) {
-    appSetting "apiKey"
-}
+)
 
 preferences {
     page(name: "mainPage")
@@ -42,10 +40,12 @@ preferences {
 }
 
 def mainPage() {
+	state.apiKey = "Gmdfw5Cq3F3Mk6xvvO0inHATJeoDv6C3KfwfOuh0"
     // Check for API key
-    if (!appSettings.apiKey?.trim()) {
+    if (!state.apiKey?.trim()) {
         dynamicPage(name: "mainPage", install: false) {
             section("API Key Missing") {
+				
                 paragraph("No API Key was found. Please go to the App Settings and enter your API Key.")
             }
         }
@@ -63,7 +63,7 @@ def mainPage() {
         dynamicPage(name: "mainPage", install: true, uninstall: true) {
             if (robots) {
                 section("Select which Litter-Robots to use:") {
-                    input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, metadata: [values: robots])
+                    input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, options: [values: robots])
                 }
                 section("How frequently do you want to poll the Litter-Robot cloud for changes? (Use a lower number if you care about trying to capture and respond to \"cleaning\" events as they happen)") {
                     input(name: "pollingInterval", title: "Polling Interval (in Minutes)", type: "enum", required: false, multiple: false, defaultValue: 5, description: "5", options: ["1", "5", "10", "15", "30"])
@@ -198,10 +198,11 @@ def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
         ]
         
         try {
+			def result
             switch (calloutMethod) {
                 case "GET":
                     httpGet(params) {resp->
-                        return resp
+                        result = resp
                     }
                     break
                 case "PATCH":
@@ -209,14 +210,15 @@ def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
                     // NOTE: break is purposefully missing so that it falls into the next case and "POST"s
                 case "POST":
                     httpPostJson(params) {resp->
-                        return resp
+                        result = resp
                     }
                     break
                 default:
                     log.error "unhandled method"
-                    return [error: "unhandled method"]
+                    result =  [error: "unhandled method"]
                     break
             }
+			return result
         } catch (groovyx.net.http.HttpResponseException e) {
             log.info e
             return e.response
@@ -254,7 +256,7 @@ def initialize() {
             def childDevice = getChildDevice(deviceId)
             if(!childDevice) {
                 log.info "Adding device: ${state.robots[deviceId]} [${deviceId}]"
-                childDevice = addChildDevice(app.namespace, "Litter-Robot", deviceId, location.hubs[0]?.id, [label: state.robots[deviceId], completedSetup: true])
+                childDevice = addChildDevice("natekspencer", "Litter-Robot", deviceId, location.hubs[0]?.id, [label: state.robots[deviceId], completedSetup: true])
             }
             childDevices.add(childDevice)
         } catch (e) {
@@ -265,7 +267,8 @@ def initialize() {
     // set up polling only if we have child devices
     if(childDevices.size() > 0) {
         pollChildren()
-        "runEvery${pollingInterval}Minute${pollingInterval != "1" ? 's' : ''}"("pollChildren")
+		
+        schedule("0 0/${pollingInterval} * * * ?", pollChildren)
     } else unschedule(pollChildren)
 }
 

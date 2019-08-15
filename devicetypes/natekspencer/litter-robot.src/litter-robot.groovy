@@ -56,7 +56,6 @@ metadata {
         //capability "Filter Status" // maybe add this so as to remind to replace the filter after x days?
         capability "Motion Sensor"
         capability "Power Source"
-        capability "Robot Cleaner Movement"
         capability "Switch"
         capability "Tamper Alert"
         capability "Refresh"
@@ -64,10 +63,11 @@ metadata {
         capability "Actuator"
         capability "Sensor"
 
-        attribute "cycleCapacity" , "number"
-        attribute "cycleCount"    , "number"
-        attribute "lastStatusCode", "string"
-        attribute "lastCleaned"   , "string"
+        attribute "cycleCapacity", "number"
+        attribute "cycleCount"   , "number"
+		attribute "cyclesAfterDrawerFull", "number"
+		attribute "litterRobotId", "string"
+		attribute "lastCleaned", "string"	
 
         command "lightOn"
         command "lightOff"
@@ -92,127 +92,6 @@ metadata {
                                                           "not responsible for any injury that may "       +
                                                           "occur should your pet be in the Litter-Robot "  +
                                                           "when a forced clean cycle is started."           , range: "(1..*)"
-    }
-
-    tiles(scale: 2) {
-        multiAttributeTile(name: "lastStatusCode", type: "generic", width: 6, height: 4) {
-            tileAttribute("device.lastStatusCode", key: "PRIMARY_CONTROL") {
-                attributeState "val"    , label: '${currentValue}'                                                                 , backgroundColor: "#ffffff", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png", defaultState: true
-                attributeState "BR"     , label: 'Bonnet Removed'                                                                  , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "CCC"    , label: 'Clean Cycle Complete'                                                            , backgroundColor: "#ffffff", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "CCP"    , label: 'Clean Cycle In Progress'                                                         , backgroundColor: "#00a0dc", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "CSF"    , label: 'Cat Sensor Fault'                                                                , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "SCF"    , label: 'Cat Sensor Fault Startup'                                                        , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "CSI"    , label: 'Cat Sensor Interrupted'                                                          , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "CST"    , label: 'Cat Sensor Timing'                                                               , backgroundColor: "#ffffff", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "DF1"    , label: 'Drawer Full (2 cycles left)'                                                     , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "DF2"    , label: 'Drawer Full (1 cycle left)'                                                      , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "DFS"    , label: 'Drawer Full (0 cycles left)'                                                     , backgroundColor: "#bc2323", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "SDF"    , label: 'Drawer Full (0 cycles left)'                                                     , backgroundColor: "#bc2323", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "DHF"    , label: 'Dump + Home Position Fault'                                                      , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "DPF"    , label: 'Dump Position Fault'                                                             , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "HPF"    , label: 'Home Position Fault'                                                             , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "EC"     , label: 'Empty Cycle'                                                                     , backgroundColor: "#00a0dc", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "OFF"    , label: 'Power Off'                                                                       , backgroundColor: "#ffffff", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "OFFLINE", label: 'Device Is Offline'                                                               , backgroundColor: "#cccccc", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "OTF"    , label: 'Over Torque Fault'                                                               , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "P"      , label: 'Clean Cycle Paused'                                                              , backgroundColor: "#00a0dc", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "PD"     , label: 'Pinch Detect'                                                                    , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "SPF"    , label: 'Pinch Detect Startup'                                                            , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "RDY"    , label: 'Ready\nPress To Clean'  , action: "setRobotCleanerMovement", nextState: "startCC", backgroundColor: "#ffffff", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-                attributeState "startCC", label: 'Preparing To Clean'     , action: "setRobotCleanerMovement", nextState: "startCC", backgroundColor: "#00a0dc", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
-            }
-            tileAttribute("device.robotStatusText", key: "SECONDARY_CONTROL") {
-                attributeState "val", label: '${currentValue}', defaultState: true
-            }
-        }
-
-        standardTile("robotCleanerMovement", "device.robotCleanerMovement", width: 2, height: 2, decoration: "flat") {
-            state "homing"   , label: 'robot cleaner:\n${currentValue}'
-            state "idle"     , label: 'robot cleaner:\n${currentValue}'
-            state "charging" , label: 'robot cleaner:\n${currentValue}'
-            state "alarm"    , label: 'robot cleaner:\n${currentValue}', icon: "st.alarm.alarm.alarm"
-            state "powerOff" , label: 'robot cleaner:\n${currentValue}'
-            state "reserve"  , label: 'robot cleaner:\n${currentValue}'
-            state "point"    , label: 'robot cleaner:\n${currentValue}'
-            state "after"    , label: 'robot cleaner:\n${currentValue}'
-            state "cleaning" , label: 'robot cleaner:\n${currentValue}'
-        }
-
-        standardTile("nightLightActive", "device.nightLightActive", width: 2, height: 2, decoration: "flat") {
-            state "on"        , label: 'night light:\non'         , action: "lightOff", nextState: "turningOff", backgroundColor: "#00a0dc", icon: "st.switches.light.on" , defaultState: true
-            state "turningOff", label: 'night light:\nturning off', action: "lightOff", nextState: "turningOff", backgroundColor: "#ffffff", icon: "st.switches.light.on"
-            state "off"       , label: 'night light:\noff'        , action: "lightOn" , nextState: "turningOn" , backgroundColor: "#ffffff", icon: "st.switches.light.off"
-            state "turningOn" , label: 'night light:\nturning on' , action: "lightOn" , nextState: "turningOn" , backgroundColor: "#00a0dc", icon: "st.switches.light.off"
-        }
-        
-        standardTile("panelLockActive", "device.panelLockActive", width: 2, height: 2, decoration: "flat") {
-            state "on"        , label: 'panel:\nlocked'   , action: "panelLockOff", nextState: "turningOff", backgroundColor: "#00a0dc", icon: "st.presence.house.secured" 
-            state "turningOff", label: 'panel:\nunlocking', action: "panelLockOff", nextState: "turningOff", backgroundColor: "#ffffff", icon: "st.presence.house.secured"
-            state "off"       , label: 'panel:\nunlocked' , action: "panelLockOn" , nextState: "turningOn" , backgroundColor: "#ffffff", icon: "st.presence.house.unlocked", defaultState: true
-            state "turningOn" , label: 'panel:\nlocking'  , action: "panelLockOn" , nextState: "turningOn" , backgroundColor: "#00a0dc", icon: "st.presence.house.unlocked"
-        }
-        
-        standardTile("power", "device.power", width: 2, height: 2, decoration: "flat") {
-            state "on"        , label: 'power:\non'         , action: "powerOff", nextState: "turningOff", backgroundColor: "#00a0dc", icon: "st.samsung.da.RC_ic_power", defaultState: true
-            state "turningOff", label: 'power:\nturning off', action: "powerOff", nextState: "turningOff", backgroundColor: "#ffffff", icon: "st.samsung.da.RC_ic_power"
-            state "off"       , label: 'power:\noff'        , action: "powerOn" , nextState: "turningOn" , backgroundColor: "#ffffff", icon: "st.samsung.da.RC_ic_power"
-            state "turningOn" , label: 'power:\nturning on' , action: "powerOn" , nextState: "turningOn" , backgroundColor: "#00a0dc", icon: "st.samsung.da.RC_ic_power"
-        }
-        
-        standardTile("sleepModeActive", "device.sleepModeActive", width: 2, height: 2, decoration: "flat") {
-            state "on"        , label: 'sleep mode:\n${currentValue}', action: "sleepOff", nextState: "turningOff", backgroundColor: "#00a0dc", icon: "st.Weather.weather4", defaultState: true
-            state "turningOff", label: 'sleep mode:\nturning off'    , action: "sleepOff", nextState: "turningOff", backgroundColor: "#ffffff", icon: "st.Weather.weather4"
-            state "off"       , label: 'sleep mode:\n${currentValue}', action: "sleepOn" , nextState: "turningOn" , backgroundColor: "#ffffff", icon: "st.Weather.weather4"
-            state "turningOn" , label: 'sleep mode:\nturning on'     , action: "sleepOn" , nextState: "turningOn" , backgroundColor: "#00a0dc", icon: "st.Weather.weather4"
-        }
-        
-        valueTile("sleepModeTime", "device.sleepModeTime", width: 2, height: 1, decoration: "flat") {
-            state "on" , label: 'sleep mode time:\n${currentValue}'              , defaultState: true
-            state "off", label: 'sleep mode time: off\n(adjust time in settings)'
-        }
-        
-        standardTile("resetDrawerGauge", "", width: 2, height: 1, decoration: "flat") {
-            state "reset", label: 'reset drawer gauge', action: "resetDrawerGauge", icon: "st.samsung.da.RAC_ic_aircon"
-        }
-        
-        standardTile("contact", "device.contact", width: 1, height: 1, decoration: "flat") {
-            state "closed", label: '${currentValue}', icon: "st.contact.contact.closed", defaultState: true
-            state "open"  , label: '${currentValue}', icon: "st.contact.contact.open"
-        }
-        
-        standardTile("motion", "device.motion", width: 1, height: 1, decoration: "flat") {
-            state "inactive", label: '${currentValue}', icon: "st.motion.motion.inactive", defaultState: true
-            state "active"  , label: '${currentValue}', icon: "st.motion.motion.active"
-        }
-        
-        standardTile("refresh", "device.refresh", width: 2, height: 1, decoration: "flat") {
-            state "refresh", label: 'refresh', action: "refresh", icon: "st.secondary.refresh"
-        }
-        
-        standardTile("acceleration", "device.acceleration", width: 1, height: 1, decoration: "flat") {
-            state "inactive", label: '${currentValue}', icon: "st.motion.acceleration.inactive", defaultState: true
-            state "active"  , label: '${currentValue}', icon: "st.motion.acceleration.active"
-        }
-        
-        standardTile("powerSource", "device.powerSource", width: 1, height: 1, decoration: "flat") {
-            state "mains",   label: '${currentValue}', icon: "st.switches.switch.on"
-            state "battery", label: '${currentValue}', icon: "st.samsung.da.RC_ic_charge"
-            state "unknown", label: '${currentValue}', icon: "st.switches.switch.off"    , defaultState: true
-        }
-        
-        standardTile("switch", "device.switch", width: 1, height: 1, decoration: "flat") {
-            state "on" , label: '${currentValue}', backgroundColor: "#00a0dc", icon: "st.samsung.da.RC_ic_power", defaultState: true
-            state "off", label: '${currentValue}', backgroundColor: "#ffffff", icon: "st.samsung.da.RC_ic_power"
-        }
-        
-        standardTile("tamper", "device.tamper", width: 1, height: 1, decoration: "flat") {
-            state "clear"   , label: '${currentValue}', icon: "st.alarm.alarm.alarm", defaultState: true
-            state "detected", label: '${currentValue}', icon: "st.alarm.alarm.alarm"
-        }
-
-        main("lastStatusCode", "robotCleanerMovement")
-        details(["lastStatusCode", "robotCleanerMovement", "nightLightActive", "panelLockActive", "power", "sleepModeActive", "sleepModeTime", "resetDrawerGauge", "contact", "motion", "refresh"])
     }
 }
 
