@@ -61,8 +61,9 @@ metadata {
         capability "Actuator"
         capability "Sensor"
 
-        attribute "cycleCapacity", "number"
-        attribute "cycleCount"   , "number"
+        attribute "cycleCapacity" , "number"
+        attribute "cycleCount"    , "number"
+        attribute "lastStatusCode", "string"
 
         command "lightOn"
         command "lightOff"
@@ -90,8 +91,8 @@ metadata {
     }
 
     tiles(scale: 2) {
-        multiAttributeTile(name: "robotCleanerMovement", type: "generic", width: 6, height: 4) {
-            tileAttribute("device.robotCleanerMovement", key: "PRIMARY_CONTROL") {
+        multiAttributeTile(name: "lastStatusCode", type: "generic", width: 6, height: 4) {
+            tileAttribute("device.lastStatusCode", key: "PRIMARY_CONTROL") {
                 attributeState "val"    , label: '${currentValue}'                                                                 , backgroundColor: "#ffffff", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png", defaultState: true
                 attributeState "BR"     , label: 'Bonnet Removed'                                                                  , backgroundColor: "#e86d13", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
                 attributeState "CCC"    , label: 'Clean Cycle Complete'                                                            , backgroundColor: "#ffffff", icon: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png"
@@ -121,7 +122,19 @@ metadata {
                 attributeState "val", label: '${currentValue}', defaultState: true
             }
         }
-        
+
+        standardTile("robotCleanerMovement", "device.robotCleanerMovement", width: 2, height: 2, decoration: "flat") {
+            state "homing"   , label: 'robot cleaner:\n${currentValue}'
+            state "idle"     , label: 'robot cleaner:\n${currentValue}'
+            state "charging" , label: 'robot cleaner:\n${currentValue}'
+            state "alarm"    , label: 'robot cleaner:\n${currentValue}', icon: "st.alarm.alarm.alarm"
+            state "powerOff" , label: 'robot cleaner:\n${currentValue}'
+            state "reserve"  , label: 'robot cleaner:\n${currentValue}'
+            state "point"    , label: 'robot cleaner:\n${currentValue}'
+            state "after"    , label: 'robot cleaner:\n${currentValue}'
+            state "cleaning" , label: 'robot cleaner:\n${currentValue}'
+        }
+
         standardTile("nightLightActive", "device.nightLightActive", width: 2, height: 2, decoration: "flat") {
             state "on"        , label: 'night light:\non'         , action: "lightOff", nextState: "turningOff", backgroundColor: "#00a0dc", icon: "st.switches.light.on" , defaultState: true
             state "turningOff", label: 'night light:\nturning off', action: "lightOff", nextState: "turningOff", backgroundColor: "#ffffff", icon: "st.switches.light.on"
@@ -194,8 +207,8 @@ metadata {
             state "detected", label: '${currentValue}', icon: "st.alarm.alarm.alarm"
         }
 
-        main("robotCleanerMovement")
-        details(["robotCleanerMovement", "nightLightActive", "panelLockActive", "power", "sleepModeActive", "sleepModeTime", "resetDrawerGauge", "contact", "motion", "refresh"])
+        main("lastStatusCode", "robotCleanerMovement")
+        details(["lastStatusCode", "robotCleanerMovement", "nightLightActive", "panelLockActive", "power", "sleepModeActive", "sleepModeTime", "resetDrawerGauge", "contact", "motion", "refresh"])
     }
 }
 
@@ -397,7 +410,8 @@ def setRobotStatusText() {
 def parseUnitStatus(status, lastSeen) {
     // Create default events
     def events = [:]
-    events["robotCleanerMovement"]     = [value: status]
+    events["robotCleanerMovement"]     = [value: ""]
+    events["lastStatusCode"]           = [value: status]
     events["acceleration"]             = [value: "inactive"]
     events["contact"]                  = [value: "closed"]
     events["DeviceWatch-DeviceStatus"] = [value: "online", displayed: false]
@@ -407,63 +421,82 @@ def parseUnitStatus(status, lastSeen) {
     events["switch"]                   = [value: "off"]
     events["tamper"]                   = [value: "clear"]
     
+    def robotCleanerMovement = "idle";
+    
     // All known statuses listed for sake of advancing this code even though some of them do not currently change default events above
     switch (status) {
         case "BR": // Bonnet Removed - The Litter-Robot can't function until the top is secured
             events["contact"].value = "open"
             events["tamper"].value = "detected"
+			events["robotCleanerMovement"].value = "alarm";
             break
         case "CCC": // Clean Cycle Complete - Clean litter is now ready for next use
             events["lastCleaned"] = [value: lastSeen, displayed: false]
+			events["robotCleanerMovement"].value = "idle";
             break
         case "CCP": // Clean Cycle In Progress - Litter-Robot is running a Clean Cycle
             events["acceleration"].value = "active"
             events["contact"].value = "open"
             events["lastCleaned"] = [value: lastSeen, displayed: false]
             events["switch"].value = "on"
+			events["robotCleanerMovement"].value = "cleaning";
             break
         case "CSF": // Cat Sensor Fault - Weight in the Litter-Robot is too heavy
         case "SCF": // Cat Sensor Fault Startup - Weight in the Litter-Robot is too heavy
+			events["robotCleanerMovement"].value = "alarm";
             break
         case "CSI": // Cat Sensor Interrupted - Cat re-entered the Litter-Robot while cycling
             events["contact"].value = "open"
             events["motion"].value = "active"
+			events["robotCleanerMovement"].value = "alarm";
             break
         case "CST": // Cat Sensor Timing - Cat was in Litter-Robot, timer waiting to start Clean Cycle
             events["motion"].value = "active"
+			events["robotCleanerMovement"].value = "idle";
             break
         case "DF1": // Drawer Is Full - Empty the Waste Drawer soon (2 cycles left)
         case "DF2": // Drawer Is Full - Empty the Waste Drawer soon (1 cycle left)
-            break
         case "DFS": // Drawer Full - Your Litter-Robot is full. It won't auto cycle anymore
+        case "SDF": // Started with Drawer Full? - Your Litter-Robot is full. It won't auto cycle anymore
+			events["robotCleanerMovement"].value = "alarm";
             break
         case "DHF": // Dump + Home Position Fault - Litter-Robot unable to find the dump and home position
         case "DPF": // Dump Position Fault - Litter-Robot unable to find the dump position
         case "HPF": // Home Position Fault - Litter-Robot unable to find the home position
+			events["robotCleanerMovement"].value = "alarm";
             break
         case "EC": // Empty Cycle - Emptying all of the litter into the waste drawer
+			events["robotCleanerMovement"].value = "homing";
             break
         case "OFF": // Power Off - The Litter-Robot is turned off and will not run cycles
             events["power"].value = "off"
+			events["robotCleanerMovement"].value = "powerOff";
             break
         case "OFFLINE": // Offline - The Litter-Robot is not connected to the internet
             events["DeviceWatch-DeviceStatus"].value = "offline"
             events["healthStatus"].value = "offline"
+			events["robotCleanerMovement"].value = "powerOff";
             break
         case "OTF": // Over Torque Fault - The globe rotation was over torqued
+			events["robotCleanerMovement"].value = "alarm";
             break
         case "P": // Clean Cycle Paused - Press Cycle to resume or press Empty or Reset to abort Clean Cycle.
             events["contact"].value = "open"
+			events["robotCleanerMovement"].value = "alarm";
             break
         case "PD": // Pinch Detect - Anti-Pinch safety feature was triggered
         case "SPF": // Pinch Detect Startup - Anti-Pinch safety feature was triggered
+			events["robotCleanerMovement"].value = "alarm";
             break
         case "RDY": // Ready - The Litter-Robot is ready for your cat
+			events["robotCleanerMovement"].value = "idle";
             break
         case "UNKNOWN": // Unknown
         default:
+			events["robotCleanerMovement"].value = "alarm";
             break
     }
+
     events.each {k, v ->
         sendEvent(name: k, value: v.value, displayed: v.displayed)
     }
