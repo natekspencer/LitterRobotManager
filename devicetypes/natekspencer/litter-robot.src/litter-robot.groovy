@@ -41,6 +41,9 @@
  *                              removed an incorrect one, fixed issue to prevent a forced clean cycle from running
  *                              during active sleep mode hours, added support for "battery" powerSource when unit
  *                              reports it is running off the backup battery, text tweaks and formatting
+ *  1.2.0       2019-12-05      Update from @mbafford for robotCleanerMovement values to match SmartThings published
+ *                              enum for the capability: https://docs.smartthings.com/en/latest/capabilities-reference.html
+ *  1.2.1       2020-01-22      Exposed lastCleaned as an attribute
  *
  */
 
@@ -64,6 +67,7 @@ metadata {
         attribute "cycleCapacity" , "number"
         attribute "cycleCount"    , "number"
         attribute "lastStatusCode", "string"
+        attribute "lastCleaned"   , "string"
 
         command "lightOn"
         command "lightOff"
