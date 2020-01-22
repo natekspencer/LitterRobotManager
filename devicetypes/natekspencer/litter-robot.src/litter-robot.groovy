@@ -43,6 +43,7 @@
  *                              reports it is running off the backup battery, text tweaks and formatting
  *  1.2.0       2019-12-05      Update from @mbafford for robotCleanerMovement values to match SmartThings published
  *                              enum for the capability: https://docs.smartthings.com/en/latest/capabilities-reference.html
+ *  1.2.1       2020-01-22      Exposed lastCleaned as an attribute
  *
  */
 
