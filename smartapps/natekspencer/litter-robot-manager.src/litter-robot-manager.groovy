@@ -1,7 +1,7 @@
 /**
  *  Litter-Robot Manager
  *
- *  Copyright 2019 Nathan Spencer
+ *  Copyright 2020 Nathan Spencer
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -16,6 +16,8 @@
  *  VERSION     DATE            NOTES
  *  1.0.0       2019-04-10      Initial release
  *  1.0.1       2019-04-23      Attempt to re-auth twice if first re-auth fails. Also adds support for resetting gauge
+ *  1.0.2       2020-02-05      Adjustments to reauthorization fail logic. Prevent hitting API (except for login) when
+ *                              not logged in. Update robots with [Disconnected] status when no longer logged in.
  *
  */
 
@@ -68,7 +70,7 @@ def mainPage() {
                 }
             }
             section("Litter-Robot Authentication") {
-                href("authPage", title: "Litter-Robot API Authorization", description: "${state.credentialStatus ? state.credentialStatus+"\n" : ""}Click to enter Litter-Robot credentials")
+                href("authPage", title: "Litter-Robot API Authorization", description: "${state.credentialStatus ? "${state.credentialStatus}${state.loggedIn ? "" : " - ${state.loginResponse}"}\n" : ""}Click to enter Litter-Robot credentials")
             }
             section ("Name this instance of ${app.name}") {
                 label name: "name", title: "Assign a name", required: false, defaultValue: app.name, description: app.name, submitOnChange: true
@@ -111,46 +113,54 @@ def authResultPage() {
 boolean doLogin(){
     def loggedIn = false
     def resp = doCallout("POST", "/login", [email: email, password: password, oneSignalPlayerId: "0"])
+    state.loginAttempt = (state.loginAttempt ?: 0) + 1
     
     switch (resp.status) {
         case 403:
-            state.loginResponse = "Access forbidden: invalid API key"
-            state.credentialStatus = "[Disconnected]"
+            state.loggedIn = false
+            state.loginResponse = resp.data.message == "Forbidden" ? "Access forbidden: invalid API key" : resp.data.message
             state.uri = null
             state.token = null
             state.robots = null
             break
         case 401:
+            state.loggedIn = false
             state.loginResponse = resp.data.userMessage
-            state.credentialStatus = "[Disconnected]"
             state.uri = null
             state.token = null
             state.robots = null
             break
         case 200:
-            loggedIn = true
+            state.loggedIn = true
             state.loginResponse = resp.data._developerMessage
             state.uri = resp.data._uri
             state.token = resp.data.token
-            state.credentialStatus = "[Connected]"
             state.loginDate = toStDateString(parseLrDate(resp.data._created))
+            state.remove("loginAttempt")
             break
         default:
             log.debug resp.data
+            state.loggedIn = false
             state.loginResponse = "Login unsuccessful"
-            state.credentialStatus = "[Disconnected]"
             state.uri = null
             state.token = null
             state.robots = null
             break
     }
 
+    loggedIn = state.loggedIn
+    state.credentialStatus = loggedIn ? "[Connected]" : "[Disconnected]"
     loggedIn
 }
 
 def reAuth() {
-    if (!doLogin())
-        doLogin() // timeout or other issue occurred, try one more time
+    if (!doLogin()) {
+        runIn(60 * state.loginAttempt * state.loginAttempt, reAuth) // timeout or other login issue occurred, attempt again with exponential backoff
+        getChildDevices().each {
+            it.parseUnitStatus(state.credentialStatus, null)
+            it.sendEvent(name: "robotStatusText", value: state.loginResponse)
+        }
+    }
 }
 
 // Get the list of Litter-Robots
@@ -170,43 +180,53 @@ def doCallout(calloutMethod, urlPath, calloutBody) {
 }
 
 def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
-    log.info "Calling ${urlPath}"
-    def params = [
-        uri: "https://muvnkjeut7.execute-api.us-east-1.amazonaws.com",
-        path: "/staging/${urlPath == "/login" ? "" : (state.uri?.trim()?:"")}${urlPath}",
-        query: queryParams,
-        headers: [
-            "Content-Type": "application/json",
-            "x-api-key": appSettings.apiKey,
-            Authorization: state.token?.trim() ? "Bearer ${state.token as String}" : null
-        ],
-        body: calloutBody
-    ]
+    def isLoginRequest = urlPath == "/login"
+   
+    if (state.loggedIn || isLoginRequest) { // prevent unauthorized calls
+        log.info "\"${calloutMethod}\"-ing to \"${urlPath}\""
     
-    try {
-        switch (calloutMethod) {
-            case "GET":
-                httpGet(params) {resp->
-                    return resp
-                }
-                break
-            case "PATCH":
-                params.headers["x-http-method-override"] = "PATCH"
-            case "POST":
-                httpPostJson(params) {resp->
-                    return resp
-                }
-                break
-            default:
-                log.error "unhandled method"
-                return [error: "unhandled method"]
-                break
+        def params = [
+            uri: "https://muvnkjeut7.execute-api.us-east-1.amazonaws.com",
+            path: "/staging/${isLoginRequest ? "" : (state.uri?.trim()?:"")}${urlPath}",
+            query: queryParams,
+            headers: [
+                "Content-Type": "application/json",
+                "x-api-key": appSettings.apiKey,
+                Authorization: state.token?.trim() ? "Bearer ${state.token as String}" : null
+            ],
+            body: calloutBody
+        ]
+        
+        try {
+            switch (calloutMethod) {
+                case "GET":
+                    httpGet(params) {resp->
+                        return resp
+                    }
+                    break
+                case "PATCH":
+                    params.headers["x-http-method-override"] = "PATCH"
+                    // NOTE: break is purposefully missing so that it falls into the next case and "POST"s
+                case "POST":
+                    httpPostJson(params) {resp->
+                        return resp
+                    }
+                    break
+                default:
+                    log.error "unhandled method"
+                    return [error: "unhandled method"]
+                    break
+            }
+        } catch (groovyx.net.http.HttpResponseException e) {
+            log.info e
+            return e.response
+        } catch (e) {
+            log.error "Something went wrong: ${e}"
+            return [error: e.message]
         }
-    } catch (groovyx.net.http.HttpResponseException e) {
-        return e.response
-    } catch (e) {
-        log.error "Something went wrong: ${e}"
-        return [error: e.message]
+    } else {
+        log.info "skipping request since the user is not currently logged in"
+        return []
     }
 }
 
@@ -259,7 +279,9 @@ def pollChildren() {
         devices.each {
             def dni = it.deviceNetworkId
             def deviceData = robots.find { [app.id, it.litterRobotId].join('.') == dni }
-            it.parseEventData(deviceData)
+            if (deviceData) {
+                it.parseEventData(deviceData)
+            }
         }
     }
 }
