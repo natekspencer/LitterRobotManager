@@ -191,7 +191,7 @@ def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
             query: queryParams,
             headers: [
                 "Content-Type": "application/json",
-                "x-api-key": appSettings.apiKey,
+                "x-api-key": state.apiKey,
                 Authorization: state.token?.trim() ? "Bearer ${state.token as String}" : null
             ],
             body: calloutBody
