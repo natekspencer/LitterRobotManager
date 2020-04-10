@@ -1,5 +1,5 @@
 {
-  "name": "Litter Robot Integration",
+  "packageName": "Litter Robot Integration",
   "author": "Nathan Spencer & Dominick Meglio",
   "version": "1.0.2",
   "minimumHEVersion": "2.1.9",
