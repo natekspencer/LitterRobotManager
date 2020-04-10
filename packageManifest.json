@@ -1,0 +1,27 @@
+{
+  "name": "Litter Robot Integration",
+  "author": "Nathan Spencer & Dominick Meglio",
+  "version": "1.0.2",
+  "minimumHEVersion": "2.1.9",
+  "licenseFile": "https://raw.githubusercontent.com/dcmeglio/hubitat-litterrobot/master/LICENSE",
+  "dateReleased": "2020-04-10",
+  "apps": [
+    {
+      "id": "de135b2f-fe3f-4b98-98d5-43be99cb6c71",
+      "name": "Litter-Robot Manager",
+      "namespace": "natekspencer",
+      "location": "https://raw.githubusercontent.com/dcmeglio/hubitat-litterrobot/master/smartapps/natekspencer/litter-robot-manager.src/litter-robot-manager.groovy",
+      "required": true,
+      "oauth": false
+    }
+  ],
+  "drivers": [
+    {
+      "id": "5d4ffc2e-0b3d-4c33-8000-5f0a3357ba38",
+      "name": "Litter-Robot",
+      "namespace": "natekspencer",
+      "location": "https://raw.githubusercontent.com/dcmeglio/hubitat-litterrobot/master/devicetypes/natekspencer/litter-robot.src/litter-robot.groovy",
+      "required": true
+    }
+  ]
+}
