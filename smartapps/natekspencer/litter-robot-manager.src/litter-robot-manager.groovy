@@ -18,7 +18,7 @@
  *  1.0.1       2019-04-23      Attempt to re-auth twice if first re-auth fails. Also adds support for resetting gauge
  *  1.0.2       2020-02-05      Adjustments to reauthorization fail logic. Prevent hitting API (except for login) when
  *                              not logged in. Update robots with [Disconnected] status when no longer logged in.
- *
+ *  1.0.3       2020-05-15      Adjust LR selection dropdown to support > 1 device. 
  */
 
 definition(
@@ -63,7 +63,7 @@ def mainPage() {
         dynamicPage(name: "mainPage", install: true, uninstall: true) {
             if (robots) {
                 section("Select which Litter-Robots to use:") {
-                    input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, options: [values: robots])
+                    input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, options: robots)
                 }
                 section("How frequently do you want to poll the Litter-Robot cloud for changes? (Use a lower number if you care about trying to capture and respond to \"cleaning\" events as they happen)") {
                     input(name: "pollingInterval", title: "Polling Interval (in Minutes)", type: "enum", required: false, multiple: false, defaultValue: 5, description: "5", options: ["1", "5", "10", "15", "30"])
