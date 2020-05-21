@@ -59,7 +59,6 @@ metadata {
         capability "Switch"
         capability "Tamper Alert"
         capability "Refresh"
-        capability "Health Check"
         capability "Actuator"
         capability "Sensor"
 
@@ -197,7 +196,7 @@ def monitorForceClean() {
     if (!forceCleanCycleInterval) unschedule(monitorForceClean) // clean up schedule just in case
     else {
         use(TimeCategory) {
-            if ((parent.parseLrDate(device.currentValue("lastCleaned")) + forceCleanCycleInterval.hours) < new Date() && !isInSleepMode()) {
+            if ((parent.parseLrDate(device.currentValue("lastCleaned")) + forceCleanCycleInterval.toInteger().hours) < new Date() && !isInSleepMode()) {
                 log.info "Forcing clean cycle"
                 setRobotCleanerMovement()
             }
