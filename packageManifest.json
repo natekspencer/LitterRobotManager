@@ -14,7 +14,8 @@
       "namespace": "natekspencer",
       "location": "https://raw.githubusercontent.com/dcmeglio/hubitat-litterrobot/master/smartapps/natekspencer/litter-robot-manager.src/litter-robot-manager.groovy",
       "required": true,
-      "oauth": false
+      "oauth": false,
+	  "primary": true
     }
   ],
   "drivers": [
