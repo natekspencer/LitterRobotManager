@@ -68,7 +68,9 @@ metadata {
 		attribute "litterRobotId", "string"
 		attribute "lastCleaned", "string"	
 		attribute "drawerLevel", "number"
-		
+	// lastStatusCode values for LR full: DF1 = 1st trip of DFI sensor, DF2 = First cycle after DFI tripped, DFS = Litter Robot will no longer cycle     
+		attribute "lastStatusCode", "string"
+	    
         command "lightOn"
         command "lightOff"
         command "panelLockOn"
@@ -78,6 +80,7 @@ metadata {
         command "sleepOn"
         command "sleepOff"
         command "resetDrawerGauge"
+	command "startCleanCycle"
     }
     
     preferences {
