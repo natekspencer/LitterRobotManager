@@ -80,7 +80,7 @@ metadata {
         command "sleepOn"
         command "sleepOff"
         command "resetDrawerGauge"
-	command "startCleanCycle"
+		command "startCleanCycle"
     }
     
     preferences {
