@@ -1,12 +1,12 @@
 {
   "packageName": "Litter Robot Integration",
   "author": "Nathan Spencer & Dominick Meglio",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "minimumHEVersion": "2.1.9",
-  "releaseNotes": "Fixed a bug preventing the force clean cycle from working properly",
+  "releaseNotes": "Added lastStatusCode as an attribute and startCleanCycle as a command",
   "licenseFile": "https://raw.githubusercontent.com/dcmeglio/hubitat-litterrobot/master/LICENSE",
   "documentationLink": "https://github.com/dcmeglio/hubitat-litterrobot/blob/master/README.md",
-  "dateReleased": "2020-04-10",
+  "dateReleased": "2021-02-10",
   "apps": [
     {
       "id": "de135b2f-fe3f-4b98-98d5-43be99cb6c71",
