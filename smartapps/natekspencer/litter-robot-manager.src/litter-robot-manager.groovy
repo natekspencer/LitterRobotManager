@@ -126,7 +126,8 @@ boolean doLogin(){
             state.token_expiration = null
             break
         case 401:
-            state.loggedIn = falsestate.loginResponse = "Login unsuccessful"
+            state.loggedIn = false
+            state.loginResponse = "Login unsuccessful"
             state.refresh_token = null
             state.token = null
             state.robots = null
