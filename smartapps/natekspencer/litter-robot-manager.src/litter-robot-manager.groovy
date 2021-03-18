@@ -201,7 +201,7 @@ def authApi(username, password) {
                 password: password
             ]
         ]
-        log.debug params.uri
+
      try {
 			def result
             httpPost(params) {resp->
@@ -223,6 +223,10 @@ def getUserId() {
 }
 
 def doApiGet(path, query) {
+    if (state.token_expiration <= now()) {
+        doLogin()
+    }
+    
     def result
     def params = [
         uri: apiHost,
@@ -240,6 +244,10 @@ def doApiGet(path, query) {
 }
 
 def doApiPatch(path, body) {
+    if (state.token_expiration <= now()) {
+        doLogin()
+    }
+
     def result
     def params = [
         uri: apiHost,
@@ -260,6 +268,10 @@ def doApiPatch(path, body) {
 }
 
 def doApiPost(path, body) {
+    if (state.token_expiration <= now()) {
+        doLogin()
+    }
+         
      def result
     def params = [
         uri: apiHost,
@@ -272,64 +284,21 @@ def doApiPost(path, body) {
         ],
         body: body
     ]
-    httpPost(params) { resp -> 
+    try {
 
-        result = resp.data
+        httpPost(params) { resp -> 
+
+            result = resp.data
+        }
+    }
+    catch (e) {
+        log.debug e
+
     }
     return result   
 }
 
 
-def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
-    def isLoginRequest = urlPath == "/login"
-   
-    if (state.loggedIn || isLoginRequest) { // prevent unauthorized calls
-        log.info "\"${calloutMethod}\"-ing to \"${urlPath}\""
-    
-        def params = [
-            uri: "https://muvnkjeut7.execute-api.us-east-1.amazonaws.com",
-            path: "/staging/${isLoginRequest ? "" : (state.uri?.trim()?:"")}${urlPath}",
-            query: queryParams,
-            headers: [
-                "Content-Type": "application/json",
-                "x-api-key": appSettings.apiKey,
-                Authorization: state.token?.trim() ? "Bearer ${state.token as String}" : null
-            ],
-            body: calloutBody
-        ]
-        
-        try {
-            switch (calloutMethod) {
-                case "GET":
-                    httpGet(params) {resp->
-                        return resp
-                    }
-                    break
-                case "PATCH":
-                    params.headers["x-http-method-override"] = "PATCH"
-                    // NOTE: break is purposefully missing so that it falls into the next case and "POST"s
-                case "POST":
-                    httpPostJson(params) {resp->
-                        return resp
-                    }
-                    break
-                default:
-                    log.error "unhandled method"
-                    return [error: "unhandled method"]
-                    break
-            }
-        } catch (groovyx.net.http.HttpResponseException e) {
-            log.info e
-            return e.response
-        } catch (e) {
-            log.error "Something went wrong: ${e}"
-            return [error: e.message]
-        }
-    } else {
-        log.info "skipping request since the user is not currently logged in"
-        return []
-    }
-}
 
 def installed() {
     initialize()
