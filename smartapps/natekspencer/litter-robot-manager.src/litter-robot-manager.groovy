@@ -50,14 +50,6 @@ preferences {
 @Field static def xApiKey = "p7ndMoj61npRZP5CVz9v4Uj0bG769xy6758QRBPb"
 
 def mainPage() {
-    // Check for API key
-    if (!appSettings.apiKey?.trim()) {
-        dynamicPage(name: "mainPage", install: false) {
-            section("API Key Missing") {
-                paragraph("No API Key was found. Please go to the App Settings and enter your API Key.")
-            }
-        }
-    } else {
         if (state.userId == null)
             getUserId()
             
@@ -87,7 +79,6 @@ def mainPage() {
                 label name: "name", title: "Assign a name", required: false, defaultValue: app.name, description: app.name, submitOnChange: true
             }
         }
-    }
 }
 
 def authPage() {
