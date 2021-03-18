@@ -209,7 +209,7 @@ def authApi(username, password) {
 }
 
 def getUserId() {
-    state.userId = doApiGet("/users")?.user?.userId
+    state.userId = doApiGet("/users",null)?.user?.userId
     log.debug state.userId
 }
 
