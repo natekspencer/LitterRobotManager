@@ -21,6 +21,8 @@
  *
  */
 
+ import groovy.transform.Field
+
 definition(
     name: "Litter-Robot Manager",
     namespace: "natekspencer",
@@ -41,6 +43,12 @@ preferences {
     page(name: "authResultPage")
 }
 
+@Field static def authHost = "https://autopets.sso.iothings.site"
+@Field static def apiHost = "https://v2.api.whisker.iothings.site"
+@Field static def clientId = "IYXzWN908psOm7sNpe4G.ios.whisker.robots"
+@Field static def clientSecret = "C63CLXOmwNaqLTB2xXo6QIWGwwBamcPuaul"
+@Field static def xApiKey = "p7ndMoj61npRZP5CVz9v4Uj0bG769xy6758QRBPb"
+
 def mainPage() {
     // Check for API key
     if (!appSettings.apiKey?.trim()) {
@@ -50,6 +58,9 @@ def mainPage() {
             }
         }
     } else {
+        if (state.userId == null)
+            getUserId()
+            
         def robots = [:]
         // Get robots if we don't have them already
         if ((state.robots?.size()?:0) == 0 && state.token?.trim()) {
@@ -92,7 +103,6 @@ def authResultPage() {
     log.info "Attempting login with specified credentials..."
     
     doLogin()
-    log.info state.loginResponse
     
     // Check if login was successful
     if (state.token == null) {
@@ -112,39 +122,39 @@ def authResultPage() {
 
 boolean doLogin(){
     def loggedIn = false
-    def resp = doCallout("POST", "/login", [email: email, password: password, oneSignalPlayerId: "0"])
+    def resp = authApi(email,password)
     state.loginAttempt = (state.loginAttempt ?: 0) + 1
     
     switch (resp.status) {
         case 403:
             state.loggedIn = false
             state.loginResponse = resp.data.message == "Forbidden" ? "Access forbidden: invalid API key" : resp.data.message
-            state.uri = null
+            state.refresh_token = null
             state.token = null
             state.robots = null
+            state.token_expiration = null
             break
         case 401:
-            state.loggedIn = false
-            state.loginResponse = resp.data.userMessage
-            state.uri = null
+            state.loggedIn = falsestate.loginResponse = "Login unsuccessful"
+            state.refresh_token = null
             state.token = null
             state.robots = null
+            state.token_expiration = null
             break
         case 200:
             state.loggedIn = true
-            state.loginResponse = resp.data._developerMessage
-            state.uri = resp.data._uri
-            state.token = resp.data.token
-            state.loginDate = toStDateString(parseLrDate(resp.data._created))
+            state.token = resp.data.access_token
+            state.refresh_token = resp.data.refresh_toke
+            state.token_expiration = now() + (resp.data.expires_in*1000)-10000
             state.remove("loginAttempt")
             break
         default:
-            log.debug resp.data
             state.loggedIn = false
             state.loginResponse = "Login unsuccessful"
-            state.uri = null
+            state.refresh_token = null
             state.token = null
             state.robots = null
+            state.token_expiration = null
             break
     }
 
@@ -165,7 +175,8 @@ def reAuth() {
 
 // Get the list of Litter-Robots
 def getLitterRobots() {
-    def data = doCallout("GET", "/litter-robots", null).data
+    def data = doApiGet("/users/${state.userId}/robots", null)
+
     // save in state so we can re-use in settings
     def robots = [:]
     data.each {
@@ -175,9 +186,99 @@ def getLitterRobots() {
     data
 }
 
-def doCallout(calloutMethod, urlPath, calloutBody) {
-    doCallout(calloutMethod, urlPath, calloutBody, null)
+def authApi(username, password) {
+    def params = [
+            uri: authHost,
+            path: "/oauth/token",
+            headers: [
+                "Content-Type": "application/x-www-form-urlencoded"
+            ],
+            body: [
+                client_id: clientId,
+                client_secret: clientSecret,
+                grant_type: "password",
+                username: username,
+                password: password
+            ]
+        ]
+        log.debug params.uri
+     try {
+			def result
+            httpPost(params) {resp->
+                result = resp
+            }
+			return result
+        } catch (groovyx.net.http.HttpResponseException e) {
+            log.info e
+            return e.response
+        } catch (e) {
+            log.error "Something went wrong: ${e}"
+            return [error: e.message]
+        }
 }
+
+def getUserId() {
+    state.userId = doApiGet("/users")?.user?.userId
+    log.debug state.userId
+}
+
+def doApiGet(path, query) {
+    def result
+    def params = [
+        uri: apiHost,
+        path: path,
+        query: query,
+        headers: [
+            "Authorization": state.token,
+            "x-api-key": xApiKey
+        ]
+    ]
+    httpGet(params) { resp -> 
+        result = resp.data
+    }
+    return result
+}
+
+def doApiPatch(path, body) {
+    def result
+    def params = [
+        uri: apiHost,
+        path:path,
+        contentType: "application/json",
+        requestContentType: "application/json",
+        headers: [
+            "Content-Type": "application/json",
+            "Authorization": state.token,
+            "x-api-key": xApiKey
+        ],
+        body: body
+    ]
+    httpPatch(params) { resp -> 
+        result = resp.data
+    }
+    return result
+}
+
+def doApiPost(path, body) {
+     def result
+    def params = [
+        uri: apiHost,
+        path:path,
+        requestContentType: "application/json",
+        headers: [
+            "User-Agent": "Litter-Robot/1.3.4 (com.autopets.whisker.ios; build:59; iOS 14.4.1) Alamofire/4.9.0",
+            "Authorization": state.token,
+            "x-api-key": xApiKey
+        ],
+        body: body
+    ]
+    httpPost(params) { resp -> 
+
+        result = resp.data
+    }
+    return result   
+}
+
 
 def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
     def isLoginRequest = urlPath == "/login"
@@ -287,19 +388,17 @@ def pollChildren() {
 }
 
 def dispatchCommand(litterRobotId, command) {
-    log.info "dispatch command ${command} for ${litterRobotId}"
-    def resp = doCallout("POST", "/litter-robots/${litterRobotId}/dispatch-commands", [command: command as String])
-    resp.data
+    def data = doApiPost("/users/${state.userId}/robots/${litterRobotId}/dispatch-commands", [litterRobotId: litterRobotId, command: command as String])
+    return data
 }
 
 def getActivity(litterRobotId, limit=10) {
-    def resp = doCallout("GET", "/litter-robots/${litterRobotId}/activity", null, [limit: limit])
-    resp.data.activities
+    def data = doApiGet("/users/${state.userId}/robots/${litterRobotId}/activity", [limit: limit])
+    return data.activities
 }
 
 def resetDrawerGauge(litterRobotId, params) {
-    def resp = doCallout("PATCH", "/litter-robots/${litterRobotId}", [litterRobotNickname: params.name, cycleCapacity: params.capacity, cycleCount: 0, cyclesAfterDrawerFull: 0])
-    resp.data
+    return doApiPatch("/users/${state.userId}/robots/${litterRobotId}", [litterRobotNickname: params.name, cycleCapacity: params.capacity, cycleCount: 0, cyclesAfterDrawerFull: 0])
 }
 
 def isoFormat() {
