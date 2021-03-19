@@ -33,9 +33,7 @@ definition(
     iconX2Url: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@2x.png",
     iconX3Url: "https://raw.githubusercontent.com/natekspencer/LitterRobotManager/master/images/litter-robot@3x.png",
     singleInstance: true
-) {
-    appSetting "apiKey"
-}
+)
 
 preferences {
     page(name: "mainPage")
@@ -49,10 +47,7 @@ preferences {
 @Field static def clientSecret = "C63CLXOmwNaqLTB2xXo6QIWGwwBamcPuaul"
 @Field static def xApiKey = "p7ndMoj61npRZP5CVz9v4Uj0bG769xy6758QRBPb"
 
-def mainPage() {
-        if (state.userId == null)
-            getUserId()
-            
+def mainPage() {           
         def robots = [:]
         // Get robots if we don't have them already
         if ((state.robots?.size()?:0) == 0 && state.token?.trim()) {
@@ -66,7 +61,7 @@ def mainPage() {
         dynamicPage(name: "mainPage", install: true, uninstall: true) {
             if (robots) {
                 section("Select which Litter-Robots to use:") {
-                    input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, metadata: [values: robots])
+                    input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, options: robots)
                 }
                 section("How frequently do you want to poll the Litter-Robot cloud for changes? (Use a lower number if you care about trying to capture and respond to \"cleaning\" events as they happen)") {
                     input(name: "pollingInterval", title: "Polling Interval (in Minutes)", type: "enum", required: false, multiple: false, defaultValue: 5, description: "5", options: ["1", "5", "10", "15", "30"])
@@ -103,6 +98,8 @@ def authResultPage() {
             }
         }
     } else {
+        if (state.userId == null)
+            getUserId()
         dynamicPage(name: "authResultPage", nextPage: "mainPage", uninstall: false, install: false) {
             section("${state.loginResponse}") {
                 paragraph ("Please click next to continue setting up your Litter-Robot.")
@@ -134,6 +131,7 @@ boolean doLogin(){
             state.token_expiration = null
             break
         case 200:
+            state.loginResponse = "Login successful"
             state.loggedIn = true
             state.token = resp.data.access_token
             state.refresh_token = resp.data.refresh_toke
@@ -152,17 +150,11 @@ boolean doLogin(){
 
     loggedIn = state.loggedIn
     state.credentialStatus = loggedIn ? "[Connected]" : "[Disconnected]"
-    loggedIn
+    return loggedIn
 }
 
 def reAuth() {
-    if (!doLogin()) {
-        runIn(60 * state.loginAttempt * state.loginAttempt, reAuth) // timeout or other login issue occurred, attempt again with exponential backoff
-        getChildDevices().each {
-            it.parseUnitStatus(state.credentialStatus, null)
-            it.sendEvent(name: "robotStatusText", value: state.loginResponse)
-        }
-    }
+    // Do nothing but keep this for backwards compatibility
 }
 
 // Get the list of Litter-Robots
@@ -301,38 +293,35 @@ def updated() {
     initialize()
 }
 
-def initialize() {
-    // Tokens expire every 24 hours. Schedule to reauthorize every day
-    if(state.loginDate?.trim()) schedule(parseStDate(state.loginDate), reAuth)
-
-    def delete = getChildDevices().findAll { !settings.robots?.contains(it.deviceNetworkId) }
-    delete.each {
-        deleteChildDevice(it.deviceNetworkId)
-    }
-    
-    def childDevices = []
-    settings.robots.each {deviceId ->
-        try {
-            def childDevice = getChildDevice(deviceId)
-            if(!childDevice) {
-                log.info "Adding device: ${state.robots[deviceId]} [${deviceId}]"
-                childDevice = addChildDevice(app.namespace, "Litter-Robot", deviceId, location.hubs[0]?.id, [label: state.robots[deviceId], completedSetup: true])
-            }
-            childDevices.add(childDevice)
-        } catch (e) {
-            log.error "Error creating device: ${e}"
-        }
-    }
-    
-    // set up polling only if we have child devices
-    if(childDevices.size() > 0) {
-        pollChildren()
-        "runEvery${pollingInterval}Minute${pollingInterval != "1" ? 's' : ''}"("pollChildren")
-    } else unschedule(pollChildren)
+def initialize() {		
+    def delete = getChildDevices().findAll { !settings.robots?.contains(it.deviceNetworkId) }	
+    delete.each {	
+        deleteChildDevice(it.deviceNetworkId)	
+    }	
+    	
+    def childDevices = []	
+    settings.robots.each {deviceId ->	
+        try {	
+            def childDevice = getChildDevice(deviceId)	
+            if(!childDevice) {	
+                log.info "Adding device: ${state.robots[deviceId]} [${deviceId}]"	
+                childDevice = addChildDevice("natekspencer", "Litter-Robot", deviceId, location.hubs[0]?.id, [label: state.robots[deviceId], completedSetup: true])	
+            }	
+            childDevices.add(childDevice)	
+        } catch (e) {	
+            log.error "Error creating device: ${e}"	
+        }	
+    }	
+    	
+    // set up polling only if we have child devices	
+    if(childDevices.size() > 0) {	
+        pollChildren()	
+			
+        schedule("0 0/${pollingInterval} * * * ?", pollChildren)	
+    } else unschedule(pollChildren)	
 }
 
 def pollChildren() {
-    log.info "polling..."
     def devices = getChildDevices()
     if (devices.size() == 0) {
         log.info "no children to update: skipping polling"
