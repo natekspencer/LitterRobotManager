@@ -188,7 +188,7 @@ def authApi(username, password) {
 
      try {
 			def result
-            httpPost(params) {resp->
+            httpPost(params) { resp->
                 result = resp
             }
 			return result
@@ -206,6 +206,12 @@ def getUserId() {
     log.debug state.userId
 }
 
+def reauthenticateIfNeeded(e) {
+    if (e.response.status == 401 || e.response.status == 403)
+        return doLogin()
+    return false
+}
+
 def doApiGet(path, query) {
     if (state.token_expiration <= now()) {
         doLogin()
@@ -221,8 +227,26 @@ def doApiGet(path, query) {
             "x-api-key": xApiKey
         ]
     ]
-    httpGet(params) { resp -> 
-        result = resp.data
+    try
+    {
+        httpGet(params) { resp -> 
+            result = resp.data
+        }
+    } catch (groovyx.net.http.HttpResponseException e) {
+        if (reauthenticateIfNeeded(e)) {
+            try {
+                httpGet(params) { resp -> 
+                    result = resp.data
+                }
+            }
+            catch (err) {
+                log.error err
+                return null
+            }
+        }
+    }
+    catch (e) {
+        log.error e
     }
     return result
 }
@@ -245,8 +269,26 @@ def doApiPatch(path, body) {
         ],
         body: body
     ]
-    httpPatch(params) { resp -> 
-        result = resp.data
+    try
+    {
+        httpPatch(params) { resp -> 
+            result = resp.data
+        }
+    } catch (groovyx.net.http.HttpResponseException e) {
+        if (reauthenticateIfNeeded(e)) {
+            try {
+                httpPatch(params) { resp -> 
+                    result = resp.data
+                }
+            }
+            catch (err) {
+                log.error err
+                return null
+            }
+        }
+    }
+    catch (e) {
+        log.error e
     }
     return result
 }
@@ -256,7 +298,7 @@ def doApiPost(path, body) {
         doLogin()
     }
          
-     def result
+    def result
     def params = [
         uri: apiHost,
         path:path,
@@ -271,13 +313,24 @@ def doApiPost(path, body) {
     try {
 
         httpPost(params) { resp -> 
-
             result = resp.data
         }
     }
+    catch (groovyx.net.http.HttpResponseException e) {
+        if (reauthenticateIfNeeded(e)) {
+            try {
+                httpPost(params) { resp -> 
+                    result = resp.data
+                }
+            }
+            catch (err) {
+                log.error err
+                return null
+            }
+        }
+    }
     catch (e) {
-        log.debug e
-
+        log.error e
     }
     return result   
 }
