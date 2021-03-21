@@ -18,7 +18,7 @@
  *  1.0.1       2019-04-23      Attempt to re-auth twice if first re-auth fails. Also adds support for resetting gauge
  *  1.0.2       2020-02-05      Adjustments to reauthorization fail logic. Prevent hitting API (except for login) when
  *                              not logged in. Update robots with [Disconnected] status when no longer logged in.
- *
+ *  1.0.3       2020-05-15      Adjust LR selection dropdown to support > 1 device. 
  */
 
  import groovy.transform.Field
