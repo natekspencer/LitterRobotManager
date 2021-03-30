@@ -18,6 +18,7 @@
  *  1.0.1       2019-04-23      Attempt to re-auth twice if first re-auth fails. Also adds support for resetting gauge
  *  1.0.2       2020-02-05      Adjustments to reauthorization fail logic. Prevent hitting API (except for login) when
  *                              not logged in. Update robots with [Disconnected] status when no longer logged in.
+ *  1.0.3       2021-03-30      Fix to use newer API. Add settings for apiKey, clientId and clientSecret with defaults.
  *
  */
 
@@ -33,6 +34,8 @@ definition(
     singleInstance: true
 ) {
     appSetting "apiKey"
+    appSetting "clientId"
+    appSetting "clientSecret"
 }
 
 preferences {
@@ -42,39 +45,30 @@ preferences {
 }
 
 def mainPage() {
-    // Check for API key
-    if (!appSettings.apiKey?.trim()) {
-        dynamicPage(name: "mainPage", install: false) {
-            section("API Key Missing") {
-                paragraph("No API Key was found. Please go to the App Settings and enter your API Key.")
+    def robots = [:]
+    // Get robots if we don't have them already
+    if ((state.robots?.size()?:0) == 0 && state.accessToken?.trim()) {
+        getLitterRobots()
+    }
+    if (state.robots) {
+        robots = state.robots
+        robots.sort { it.value }
+    }
+        
+    dynamicPage(name: "mainPage", install: true, uninstall: true) {
+        if (robots) {
+            section("Select which Litter-Robots to use:") {
+                input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, metadata: [values: robots])
+            }
+            section("How frequently do you want to poll the Litter-Robot cloud for changes? (Use a lower number if you care about trying to capture and respond to \"cleaning\" events as they happen)") {
+                input(name: "pollingInterval", title: "Polling Interval (in Minutes)", type: "enum", required: false, multiple: false, defaultValue: 5, description: "5", options: ["1", "5", "10", "15", "30"])
             }
         }
-    } else {
-        def robots = [:]
-        // Get robots if we don't have them already
-        if ((state.robots?.size()?:0) == 0 && state.token?.trim()) {
-            getLitterRobots()
+        section("Litter-Robot Authentication") {
+            href("authPage", title: "Litter-Robot API Authorization", description: "${state.credentialStatus ? "${state.credentialStatus}${state.loggedIn ? "" : " - ${state.loginResponse}"}\n" : ""}Click to enter Litter-Robot credentials")
         }
-        if (state.robots) {
-            robots = state.robots
-            robots.sort { it.value }
-        }
-            
-        dynamicPage(name: "mainPage", install: true, uninstall: true) {
-            if (robots) {
-                section("Select which Litter-Robots to use:") {
-                    input(name: "robots", type: "enum", title: "Litter-Robots", required: false, multiple: true, metadata: [values: robots])
-                }
-                section("How frequently do you want to poll the Litter-Robot cloud for changes? (Use a lower number if you care about trying to capture and respond to \"cleaning\" events as they happen)") {
-                    input(name: "pollingInterval", title: "Polling Interval (in Minutes)", type: "enum", required: false, multiple: false, defaultValue: 5, description: "5", options: ["1", "5", "10", "15", "30"])
-                }
-            }
-            section("Litter-Robot Authentication") {
-                href("authPage", title: "Litter-Robot API Authorization", description: "${state.credentialStatus ? "${state.credentialStatus}${state.loggedIn ? "" : " - ${state.loginResponse}"}\n" : ""}Click to enter Litter-Robot credentials")
-            }
-            section ("Name this instance of ${app.name}") {
-                label name: "name", title: "Assign a name", required: false, defaultValue: app.name, description: app.name, submitOnChange: true
-            }
+        section ("Name this instance of ${app.name}") {
+            label name: "name", title: "Assign a name", required: false, defaultValue: app.name, description: app.name, submitOnChange: true
         }
     }
 }
@@ -82,8 +76,8 @@ def mainPage() {
 def authPage() {
     dynamicPage(name: "authPage", nextPage: "authResultPage", uninstall: false, install: false) {
         section("Litter-Robot Credentials") {
-            input("email", "email", title: "Email", description: "Litter-Robot Email", required: true)
-            input("password", "password", title: "Password", description: "Litter-Robot password", required: true)
+            input("username", "text", title: "Username", description: "Litter-Robot Username", required: true)
+            input("password", "password", title: "Password", description: "Litter-Robot Password", required: true)
         }
     }
 }
@@ -91,11 +85,12 @@ def authPage() {
 def authResultPage() {
     log.info "Attempting login with specified credentials..."
     
-    doLogin()
-    log.info state.loginResponse
+    if (doLogin()) {
+        state.userId = doGet("/users").data.user.userId
+    }
     
     // Check if login was successful
-    if (state.token == null) {
+    if (state.accessToken == null) {
         dynamicPage(name: "authResultPage", nextPage: "authPage", uninstall: false, install: false) {
             section("${state.loginResponse}") {
                 paragraph ("Please check your credentials and try again.")
@@ -103,47 +98,67 @@ def authResultPage() {
         }
     } else {
         dynamicPage(name: "authResultPage", nextPage: "mainPage", uninstall: false, install: false) {
-            section("${state.loginResponse}") {
+            section("Login Successful") {
                 paragraph ("Please click next to continue setting up your Litter-Robot.")
             }
         }
     }
 }
 
+
 boolean doLogin(){
     def loggedIn = false
-    def resp = doCallout("POST", "/login", [email: email, password: password, oneSignalPlayerId: "0"])
-    state.loginAttempt = (state.loginAttempt ?: 0) + 1
     
-    switch (resp.status) {
-        case 403:
-            state.loggedIn = false
-            state.loginResponse = resp.data.message == "Forbidden" ? "Access forbidden: invalid API key" : resp.data.message
-            state.uri = null
-            state.token = null
-            state.robots = null
-            break
+    state.loginAttempt = (state.loginAttempt ?: 0) + 1
+
+    def params = [
+        uri: "https://autopets.sso.iothings.site/oauth/token",
+        headers: [
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "Accept": "application/json",
+        ],
+        body: [
+            client_id: appSettings.clientId ?: "IYXzWN908psOm7sNpe4G.ios.whisker.robots",
+            client_secret: appSettings.clientSecret ?: "C63CLXOmwNaqLTB2xXo6QIWGwwBamcPuaul",
+            grant_type: "password",
+            username: username,
+            password: password
+        ]
+    ]
+
+    def response
+
+    try {
+        httpPost(params) {resp->
+            response = resp
+        }
+    } catch (groovyx.net.http.HttpResponseException e) {
+        log.info e
+        response = e.response
+    } catch (e) {
+        log.error "Something went wrong: ${e}"
+        response = [error: e.message]
+    }
+    
+    switch (response.status) {
         case 401:
             state.loggedIn = false
-            state.loginResponse = resp.data.userMessage
-            state.uri = null
-            state.token = null
+            state.accessToken = null
+            state.refreshToken = null
             state.robots = null
             break
         case 200:
             state.loggedIn = true
-            state.loginResponse = resp.data._developerMessage
-            state.uri = resp.data._uri
-            state.token = resp.data.token
-            state.loginDate = toStDateString(parseLrDate(resp.data._created))
+            state.accessToken = response.data.access_token
+            state.refreshToken = response.data.refresh_token
+            // state.loginDate = toStDateString(parseLrDate(response.data._created))
             state.remove("loginAttempt")
             break
         default:
-            log.debug resp.data
+            log.debug response.data
             state.loggedIn = false
-            state.loginResponse = "Login unsuccessful"
-            state.uri = null
-            state.token = null
+            state.accessToken = null
+            state.refreshToken = null
             state.robots = null
             break
     }
@@ -165,7 +180,7 @@ def reAuth() {
 
 // Get the list of Litter-Robots
 def getLitterRobots() {
-    def data = doCallout("GET", "/litter-robots", null).data
+    def data = doGet("/users/${state.userId}/robots").data
     // save in state so we can re-use in settings
     def robots = [:]
     data.each {
@@ -175,24 +190,31 @@ def getLitterRobots() {
     data
 }
 
-def doCallout(calloutMethod, urlPath, calloutBody) {
-    doCallout(calloutMethod, urlPath, calloutBody, null)
+def doGet(urlPath) {
+    return doCallout("GET", urlPath, null, null)
 }
 
+def doGet(urlPath, queryParams) {
+    return doCallout("GET", urlPath, null, queryParams)
+}
+
+def doCallout(calloutMethod, urlPath, calloutBody) {
+    return doCallout(calloutMethod, urlPath, calloutBody, null)
+}
+
+
 def doCallout(calloutMethod, urlPath, calloutBody, queryParams){
-    def isLoginRequest = urlPath == "/login"
-   
-    if (state.loggedIn || isLoginRequest) { // prevent unauthorized calls
-        log.info "\"${calloutMethod}\"-ing to \"${urlPath}\""
+    if (state.loggedIn) { // prevent unauthorized calls
+        log.info "\"${calloutMethod}\"-ing \"${urlPath}\""
     
         def params = [
-            uri: "https://muvnkjeut7.execute-api.us-east-1.amazonaws.com",
-            path: "/staging/${isLoginRequest ? "" : (state.uri?.trim()?:"")}${urlPath}",
+            uri: "https://v2.api.whisker.iothings.site",
+            path: urlPath,
             query: queryParams,
             headers: [
                 "Content-Type": "application/json",
-                "x-api-key": appSettings.apiKey,
-                Authorization: state.token?.trim() ? "Bearer ${state.token as String}" : null
+                "x-api-key": appSettings.apiKey ?: "p7ndMoj61npRZP5CVz9v4Uj0bG769xy6758QRBPb",
+                Authorization: "Bearer ${state.accessToken}"
             ],
             body: calloutBody
         ]
@@ -288,17 +310,17 @@ def pollChildren() {
 
 def dispatchCommand(litterRobotId, command) {
     log.info "dispatch command ${command} for ${litterRobotId}"
-    def resp = doCallout("POST", "/litter-robots/${litterRobotId}/dispatch-commands", [command: command as String])
+    def resp = doCallout("POST", "/users/${state.userId}/robots/${litterRobotId}/dispatch-commands", [command: command as String])
     resp.data
 }
 
 def getActivity(litterRobotId, limit=10) {
-    def resp = doCallout("GET", "/litter-robots/${litterRobotId}/activity", null, [limit: limit])
+    def resp = doGet("/users/${state.userId}/robots/${litterRobotId}/activity", [limit: limit])
     resp.data.activities
 }
 
 def resetDrawerGauge(litterRobotId, params) {
-    def resp = doCallout("PATCH", "/litter-robots/${litterRobotId}", [litterRobotNickname: params.name, cycleCapacity: params.capacity, cycleCount: 0, cyclesAfterDrawerFull: 0])
+    def resp = doCallout("PATCH", "/users/${state.userId}/robots/${litterRobotId}", [litterRobotNickname: params.name, cycleCapacity: params.capacity, cycleCount: 0, cyclesAfterDrawerFull: 0])
     resp.data
 }
 

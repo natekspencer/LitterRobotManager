@@ -25,9 +25,9 @@
  *  R  - valid, not sure what it does though, reset or refresh maybe? weirdly a new parameter showed up called "cyclesUntilFull" after posting this, but still not sure how it is utilized
  *  S0 - turn off sleep mode: sleepModeActive = 0
  *  S1HH:MI:SS - turn on sleep mode: sleepModeActive = 1HH:MI:SS; HH:MI:SS is a 24 hour clock that enters sleep mode from 00:00:00-08:00:00, so if at midnight you set sleep mode to 122:30:00, then sleep mode will being in 1.5 hours or 1:30am; when coming out of sleep state, a clean cycle is performed (see details on "C" command above)
- *  W3 - set wait time to 3 minuts: cleanCycleWaitTimeMinutes = 3 (hexadecimal representation of minutes)
- *  W7 - set wait time to 7 minuts: cleanCycleWaitTimeMinutes = 7 (hexadecimal representation of minutes)
- *  WF - set wait time to 15 minuts: cleanCycleWaitTimeMinutes = F (hexadecimal representation of minutes)
+ *  W3 - set wait time to 3 minutes: cleanCycleWaitTimeMinutes = 3 (hexadecimal representation of minutes)
+ *  W7 - set wait time to 7 minutes: cleanCycleWaitTimeMinutes = 7 (hexadecimal representation of minutes)
+ *  WF - set wait time to 15 minutes: cleanCycleWaitTimeMinutes = F (hexadecimal representation of minutes)
  *
  *
  *  CHANGE HISTORY
